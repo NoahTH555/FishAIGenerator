@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Picture of Fish</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f4f8;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-top: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .image-display {
+            width: 100%;
+            max-width: 500px;
+            height: auto;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+            display: none; /* Hidden by default */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-gray-800">Your Fish Picture</h1>
+        <p class="text-gray-600">Generating a beautiful image of fish...</p>
+        <div id="loadingIndicator" class="loading-spinner"></div>
+        <img id="fishImage" class="image-display" alt="Picture of fish">
+        <p id="errorMessage" class="text-red-500 hidden">Failed to load image. Please try again.</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const fishImage = document.getElementById('fishImage');
+            const errorMessage = document.getElementById('errorMessage');
+
+            // Function to perform exponential backoff
+            const fetchWithBackoff = async (url, options, retries = 5, delay = 1000) => {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        const response = await fetch(url, options);
+                        if (!response.ok) {
+                            // If response is not OK, throw an error to trigger retry
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response;
+                    } catch (error) {
+                        if (i < retries - 1) {
+                            await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+                        } else {
+                            throw error; // Re-throw error if max retries reached
+                        }
+                    }
+                }
+            };
+
+            try {
+                // Prompt for the image generation model
+                const userPrompt = "A vibrant, colorful picture of various fish swimming in a coral reef, with clear blue water and sunlight filtering through.";
+
+                const payload = {
+                    instances: { prompt: userPrompt },
+                    parameters: { "sampleCount": 1 }
+                };
+                const apiKey = ""; // Canvas will provide this
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+
+                const response = await fetchWithBackoff(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
+                    const imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+                    fishImage.src = imageUrl;
+                    fishImage.style.display = 'block'; // Show the image
+                    loadingIndicator.style.display = 'none'; // Hide loading spinner
+                } else {
+                    errorMessage.style.display = 'block';
+                    loadingIndicator.style.display = 'none';
+                    console.error("Image generation failed: No image data received.");
+                }
+            } catch (error) {
+                errorMessage.style.display = 'block';
+                loadingIndicator.style.display = 'none';
+                console.error("Error generating image:", error);
+            }
+        });
+    </script>
+</body>
+</html>
+
